@@ -9,6 +9,7 @@ import {
   toVtt,
   projectToJson,
   downloadBlob,
+  isStandalone,
   recorderSupported,
   bestVideoMime,
   estimateSize,
@@ -30,6 +31,7 @@ export default function ExportPanel() {
   const [busyLabel, setBusyLabel] = useState('')
   const [result, setResult] = useState(null)
   const [job, setJob] = useState(null)
+  const [savedUrl, setSavedUrl] = useState('')
 
   if (!project) return null
   const duration = totalDuration(project)
@@ -207,11 +209,19 @@ export default function ExportPanel() {
               style={{ marginTop: 6 }}
               onClick={() => {
                 const ext = result.kind === 'video' ? (result.mime?.includes('mp4') ? 'mp4' : 'webm') : result.kind === 'audio' ? 'wav' : 'png'
-                downloadBlob(result.blob, `${project.name}.${ext}`)
+                setSavedUrl(downloadBlob(result.blob, `${project.name}.${ext}`))
               }}
             >
               <Icon name="download" size={13} /> {t('exp.download')}
             </button>
+            {savedUrl ? (
+              <>
+                {isStandalone() ? <div className="tiny muted" style={{ marginTop: 6 }}>{t('exp.saveHint')}</div> : null}
+                <a className="btn sm ghost block" style={{ marginTop: 6 }} href={savedUrl} target="_blank" rel="noreferrer" download>
+                  <Icon name="folder" size={13} /> {t('exp.openFile')}
+                </a>
+              </>
+            ) : null}
           </Section>
         ) : null}
       </div>

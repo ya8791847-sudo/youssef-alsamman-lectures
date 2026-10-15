@@ -19,13 +19,136 @@ const buffers = new Map() // mediaId -> AudioBuffer (cache, capped)
 const BUFFER_CACHE_MAX = 4
 const muted = { value: false }
 
+/* ------------------------------------------------------------------------- */
+/* capability detection — some Android WebViews ship no Web Audio at all      */
+/* ------------------------------------------------------------------------- */
+
+export function audioAvailable() {
+  return !!(window.AudioContext || window.webkitAudioContext) && !_silent
+}
+
+export function offlineAvailable() {
+  return !!(window.OfflineAudioContext || window.webkitOfflineAudioContext)
+}
+
+let _silent = false
+
+function pnum(v = 0) {
+  const p = { value: v, defaultValue: v }
+  const keep = () => p
+  for (const k of [
+    'setValueAtTime',
+    'linearRampToValueAtTime',
+    'exponentialRampToValueAtTime',
+    'setTargetAtTime',
+    'setValueCurveAtTime',
+    'cancelScheduledValues',
+    'cancelAndHoldAtTime',
+  ]) {
+    p[k] = keep
+  }
+  return p
+}
+
+function pnode(extra = {}) {
+  return {
+    connect(t) {
+      return t && typeof t.connect === 'function' ? t : this
+    },
+    disconnect() {},
+    ...extra,
+  }
+}
+
+function silentStream() {
+  return { getTracks: () => [], getAudioTracks: () => [], addTrack() {}, removeTrack() {} }
+}
+
+/**
+ * A silent AudioContext look-alike. Used when Web Audio is missing so
+ * playback, export and analysis degrade gracefully instead of crashing.
+ */
+export function silentContext() {
+  const node = () => pnode()
+  return {
+    __silent: true,
+    currentTime: 0,
+    sampleRate: 48000,
+    baseLatency: 0,
+    outputLatency: 0,
+    state: 'suspended',
+    destination: pnode(),
+    listener: pnode(),
+    resume: () => Promise.resolve(),
+    suspend: () => Promise.resolve(),
+    close: () => Promise.resolve(),
+    createGain: () => pnode({ gain: pnum(1) }),
+    createDynamicsCompressor: () =>
+      pnode({
+        threshold: pnum(-24),
+        knee: pnum(30),
+        ratio: pnum(12),
+        attack: pnum(0.003),
+        release: pnum(0.25),
+        reduction: 0,
+      }),
+    createAnalyser: () =>
+      pnode({
+        fftSize: 1024,
+        frequencyBinCount: 512,
+        smoothingTimeConstant: 0.8,
+        getByteFrequencyData() {},
+        getByteTimeDomainData() {},
+        getFloatFrequencyData() {},
+      }),
+    createBiquadFilter: () => pnode({ type: 'lowpass', frequency: pnum(350), Q: pnum(1), gain: pnum(0), detune: pnum(0) }),
+    createDelay: () => pnode({ delayTime: pnum(0) }),
+    createConvolver: () => pnode({ buffer: null, normalize: true }),
+    createStereoPanner: () => pnode({ pan: pnum(0) }),
+    createWaveShaper: () => pnode({ curve: null, oversample: 'none' }),
+    createChannelMerger: () => node(),
+    createChannelSplitter: () => node(),
+    createConstantSource: () => pnode({ offset: pnum(0), start() {}, stop() {} }),
+    createOscillator: () =>
+      pnode({ type: 'sine', frequency: pnum(440), detune: pnum(0), start() {}, stop() {}, setPeriodicWave() {} }),
+    createBufferSource: () =>
+      pnode({ buffer: null, playbackRate: pnum(1), detune: pnum(0), loop: false, start() {}, stop() {} }),
+    createMediaElementSource: () => node(),
+    createMediaStreamSource: () => node(),
+    createMediaStreamDestination: () => pnode({ stream: silentStream() }),
+    createBuffer: (ch = 1, len = 1, sr = 48000) => ({
+      numberOfChannels: ch,
+      length: len,
+      sampleRate: sr,
+      duration: len / sr,
+      getChannelData: () => new Float32Array(len),
+      copyToChannel() {},
+      copyFromChannel() {},
+    }),
+    decodeAudioData: () => Promise.reject(new Error('audio-unavailable')),
+  }
+}
+
 export function ctx() {
   if (!_ctx) {
     const AC = window.AudioContext || window.webkitAudioContext
-    _ctx = new AC({ latencyHint: 'interactive' })
+    try {
+      if (!AC) throw new Error('no-web-audio')
+      _ctx = new AC({ latencyHint: 'interactive' })
+    } catch {
+      _ctx = silentContext()
+      _silent = true
+    }
   }
-  if (_ctx.state === 'suspended') _ctx.resume().catch(() => {})
+  if (_ctx.state === 'suspended' && typeof _ctx.resume === 'function') _ctx.resume().catch(() => {})
   return _ctx
+}
+
+/** Offline rendering context, or a clear error when the WebView lacks one. */
+export function offlineCtx(channels, length, sampleRate) {
+  const OC = window.OfflineAudioContext || window.webkitOfflineAudioContext
+  if (!OC) throw new Error('audio-unavailable')
+  return new OC(channels, length, sampleRate)
 }
 
 let _speaker = null
@@ -78,7 +201,7 @@ export function isOutputMuted() {
 
 /** Live level meter (0..1) built from the analyser. */
 export function level() {
-  if (!_analyser || !_analyserData) return 0
+  if (!_analyser || !_analyserData || _silent) return 0
   _analyser.getByteFrequencyData(_analyserData)
   let sum = 0
   for (let i = 0; i < 64; i++) sum += _analyserData[i]
@@ -626,9 +749,9 @@ export function wavBlobFromBuffer(buffer) {
  */
 export async function generateMusic(style, duration = 30, { onProgress } = {}) {
   const c = ctx()
-  const sr = c.sampleRate
+  const sr = c.sampleRate || 48000
   const dur = Math.max(2, Math.min(300, duration))
-  const off = new OfflineAudioContext(2, Math.ceil(sr * dur), sr)
+  const off = offlineCtx(2, Math.ceil(sr * dur), sr)
   const beat = 60 / style.bpm
   const bar = beat * 4
   const bars = Math.ceil(dur / bar)
@@ -745,7 +868,8 @@ export async function generateMusic(style, duration = 30, { onProgress } = {}) {
 
 export function generateTone({ freq = 440, duration = 3, type = 'sine', freq2 = null } = {}) {
   const c = ctx()
-  const off = new OfflineAudioContext(2, Math.ceil(c.sampleRate * Math.max(0.2, duration)), c.sampleRate)
+  const sr = c.sampleRate || 48000
+  const off = offlineCtx(2, Math.ceil(sr * Math.max(0.2, duration)), sr)
   const o = off.createOscillator()
   const g = off.createGain()
   o.type = type
@@ -768,8 +892,8 @@ export function generateTone({ freq = 440, duration = 3, type = 'sine', freq2 = 
  */
 export async function mixdownWav(segments, duration, { onProgress, sampleRate } = {}) {
   const c = ctx()
-  const sr = sampleRate || c.sampleRate
-  const off = new OfflineAudioContext(2, Math.max(1, Math.ceil(sr * duration)), sr)
+  const sr = sampleRate || c.sampleRate || 48000
+  const off = offlineCtx(2, Math.max(1, Math.ceil(sr * duration)), sr)
   const masterG = off.createGain()
   masterG.gain.value = 1
   masterG.connect(off.destination)
@@ -836,7 +960,12 @@ export async function mixdownWav(segments, duration, { onProgress, sampleRate } 
 /* microphone (voice-over)                                                    */
 /* ------------------------------------------------------------------------- */
 
+export function recorderAvailable() {
+  return typeof MediaRecorder !== 'undefined' && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+}
+
 export async function recordVoiceover({ onStop, mimeType } = {}) {
+  if (!recorderAvailable()) throw new Error('recorder-unavailable')
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
   })

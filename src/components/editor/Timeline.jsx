@@ -131,6 +131,7 @@ export default function Timeline() {
     const up = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
       setDrag((d) => {
         if (!d) return null
         if (d.moved) {
@@ -147,6 +148,7 @@ export default function Timeline() {
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
   }
 
   const startScrub = (e) => {
@@ -159,9 +161,18 @@ export default function Timeline() {
     const up = () => {
       window.removeEventListener('pointermove', apply)
       window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+      if (e.target?.releasePointerCapture && e.pointerId != null) {
+        try {
+          e.target.releasePointerCapture(e.pointerId)
+        } catch {
+          /* ignore */
+        }
+      }
     }
     window.addEventListener('pointermove', apply)
     window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
   }
 
   // playhead position + auto scroll ----------------------------------------

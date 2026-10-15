@@ -85,7 +85,7 @@ export async function probe(blob, kind, url) {
       const w = 320
       c.width = w
       c.height = Math.round((w * img.naturalHeight) / Math.max(1, img.naturalWidth))
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height)
+      ctx2d(c).drawImage(img, 0, 0, c.width, c.height)
       out.poster = c.toDataURL('image/jpeg', 0.8)
       out.duration = 5
     } catch {
@@ -227,11 +227,26 @@ const CARD_THEMES = [
   ['#0b1220', '#ffffff', '#5ee7ff'],
 ]
 
+/** Canvas 2D is required for thumbnails and generated cards/titles. */
+export function canvasAvailable() {
+  try {
+    return !!document.createElement('canvas').getContext('2d')
+  } catch {
+    return false
+  }
+}
+
+function ctx2d(canvas) {
+  const g = canvas.getContext('2d')
+  if (!g) throw new Error('canvas-unavailable')
+  return g
+}
+
 export async function makeTitleCard({ title = 'العنوان', subtitle = '', width = 1920, height = 1080, theme = 0, fontSize = 9, anim = 'pop', dark = true } = {}) {
   const c = document.createElement('canvas')
   c.width = width
   c.height = height
-  const x = c.getContext('2d')
+  const x = ctx2d(c)
   const [bg, a1, a2] = CARD_THEMES[theme % CARD_THEMES.length]
   const g = x.createLinearGradient(0, 0, width, height)
   g.addColorStop(0, bg)
@@ -282,7 +297,7 @@ export async function makeSolid({ width = 1920, height = 1080, color = '#0b1220'
   const c = document.createElement('canvas')
   c.width = width
   c.height = height
-  const x = c.getContext('2d')
+  const x = ctx2d(c)
   x.fillStyle = color
   x.fillRect(0, 0, width, height)
   const blob = await new Promise((res) => c.toBlob(res, 'image/png'))

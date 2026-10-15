@@ -8,9 +8,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test": "node test/build.mjs && node test/.bundle.mjs && node test/build-dom.mjs && node test/.dom-bundle.mjs",
+    "test": "npm run test:logic && npm run test:dom && npm run test:acode",
     "test:logic": "node test/build.mjs && node test/.bundle.mjs",
-    "test:dom": "node test/build-dom.mjs && node test/.dom-bundle.mjs"
+    "test:dom": "node test/build-dom.mjs && node test/.dom-bundle.mjs",
+    "build:acode": "node scripts/build-acode.mjs",
+    "test:acode": "node scripts/build-acode.mjs && node test/acode.test.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

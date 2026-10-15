@@ -33,7 +33,7 @@ export default function Topbar() {
       </div>
 
       <button className="btn sm ghost" onClick={() => closeProject()} title={t('nav.projects')}>
-        <Icon name="folder" size={13} /> {t('nav.projects')}
+        <Icon name="folder" size={13} /> <span className="hide-sm">{t('nav.projects')}</span>
       </button>
 
       <input
@@ -43,7 +43,7 @@ export default function Topbar() {
         aria-label={t('new.name')}
       />
 
-      <span className="row gap-6 tiny muted">
+      <span className="row gap-6 tiny muted hide-sm">
         <span className={`save-dot ${dirty ? 'dirty' : ''}`} />
         {dirty ? t('common.working') : t('toast.autosaved')}
       </span>
@@ -60,7 +60,7 @@ export default function Topbar() {
         <Icon name="save" size={15} />
       </button>
 
-      <div className="row gap-4" style={{ marginInlineStart: 6 }}>
+      <div className="row gap-4 hide-sm" style={{ marginInlineStart: 6 }}>
         <button className={`btn sm ${ui.showLeft ? 'active' : ''}`} onClick={() => patchUi({ showLeft: !ui.showLeft })} title={t('editor.media')}>
           <Icon name="layers" size={13} />
         </button>
@@ -69,7 +69,7 @@ export default function Topbar() {
         </button>
       </div>
 
-      <button className="btn sm ghost" onClick={() => patchUi({ showShortcuts: true })} title={t('shot.helpTitle')}>
+      <button className="btn sm ghost hide-sm" onClick={() => patchUi({ showShortcuts: true })} title={t('shot.helpTitle')}>
         <Icon name="info" size={14} />
       </button>
       <button className="btn sm ghost lang-btn" onClick={toggle}>
@@ -78,7 +78,7 @@ export default function Topbar() {
       <button className="btn primary" onClick={() => patchUi({ rightTab: 'export' })}>
         <Icon name="download" size={14} /> {t('exp.title')}
       </button>
-      <button className="btn sm ghost" onClick={() => engine.pause()} title={t('shot.playPause')}>
+      <button className="btn sm ghost hide-sm" onClick={() => engine.pause()} title={t('shot.playPause')}>
         <Icon name="stop" size={13} />
       </button>
     </header>

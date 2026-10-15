@@ -89,9 +89,22 @@ export default function Stage() {
       engine.render()
     }
     measure()
-    const ro = new ResizeObserver(measure)
-    if (wrapRef.current) ro.observe(wrapRef.current)
-    return () => ro.disconnect()
+    let ro = null
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(measure)
+      if (wrapRef.current) ro.observe(wrapRef.current)
+    } else {
+      // older WebViews: re-measure on window resize as a fallback
+      window.addEventListener('resize', measure)
+      window.addEventListener('orientationchange', measure)
+    }
+    return () => {
+      if (ro) ro.disconnect()
+      else {
+        window.removeEventListener('resize', measure)
+        window.removeEventListener('orientationchange', measure)
+      }
+    }
   }, [project, fit])
 
   if (!project) return null

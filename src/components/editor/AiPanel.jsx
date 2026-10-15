@@ -187,9 +187,9 @@ export default function AiPanel() {
       </div>
 
       <div className="panel-body">
-        {dictationSupported() && lang === 'ar' ? null : (
-          <div className="notice-box" style={{ marginBottom: 8 }}>
-            {t('ai.dictateHint')}
+        {dictationSupported() ? null : (
+          <div className="warn-box" style={{ marginBottom: 8 }}>
+            {t('ai.dictateUnsupported')}
           </div>
         )}
 

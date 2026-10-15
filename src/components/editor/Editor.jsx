@@ -151,6 +151,7 @@ export default function Editor() {
       >
         <div className="pane-left panel">
           <div className="tabs">
+
             {leftTabs.map(([id, icon, label]) => (
               <button key={id} className={`tab ${ui.leftTab === id ? 'active' : ''}`} onClick={() => A.ui.tab(id)}>
                 <span className="row gap-6">
@@ -175,6 +176,11 @@ export default function Editor() {
                 <Icon name={icon} size={13} />
               </button>
             ))}
+            <button className="tab mobile-only" onClick={() => patchUi({ mobilePane: 'stage', showLeft: false, showRight: false })}>
+              <span className="row gap-6">
+                <Icon name="close" size={12} /> {t('editor.preview')}
+              </span>
+            </button>
           </div>
           <div className="grow" style={{ minHeight: 0, overflow: 'hidden' }}>
             {ui.rightTab === 'inspect' ? (
@@ -211,7 +217,7 @@ export default function Editor() {
             <button
               key={id}
               className={`tab ${ui.mobilePane === id ? 'active' : ''}`}
-              onClick={() => patchUi({ mobilePane: id, showLeft: id === 'media' || id === 'tools', showRight: id === 'tools' })}
+              onClick={() => patchUi({ mobilePane: id, showLeft: id === 'media', showRight: id === 'tools' })}
             >
               <span className="row gap-6 center" style={{ justifyContent: 'center' }}>
                 <Icon name={icon} size={12} /> {label}

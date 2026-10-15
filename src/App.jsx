@@ -1,8 +1,9 @@
 import { useEffect } from 'react'
 import { I18nProvider, useI18n } from './i18n/index.jsx'
+import { safeStore } from './i18n/translations.js'
 import { useStore, getState, setState, toast, dismissToast, patchUi, markSaved, openProject } from './store/store.js'
 import { hydrateProjectMedia, saveProject } from './store/media.js'
-import { requestPersistent, idb } from './store/idb.js'
+import { requestPersistent, idb, storageAvailable } from './store/idb.js'
 import { Toaster } from './components/ui.jsx'
 import Dashboard from './components/Dashboard.jsx'
 import Editor from './components/editor/Editor.jsx'
@@ -18,11 +19,11 @@ function Shell() {
     let cancelled = false
     ;(async () => {
       requestPersistent()
-      const saved = Number(localStorage.getItem('laqta.lastProject') || 0)
       setState({ ready: true })
-      if (saved) {
+      const lastId = safeStore.get('laqta.lastProjectId')
+      if (lastId && storageAvailable()) {
         try {
-          const project = await idb.get('projects', localStorage.getItem('laqta.lastProjectId'))
+          const project = await idb.get('projects', lastId)
           if (project && !cancelled) {
             await hydrateProjectMedia(project)
             openProject(project)
@@ -35,7 +36,7 @@ function Shell() {
       window.addEventListener('beforeunload', () => {
         const p = getState().project
         if (p) {
-          localStorage.setItem('laqta.lastProjectId', p.id)
+          safeStore.set('laqta.lastProjectId', p.id)
           saveProject(p).catch(() => {})
         }
       })

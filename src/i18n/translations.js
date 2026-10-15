@@ -108,6 +108,8 @@ export const dict = {
     'media.noAudio': 'بدون صوت',
     'media.files': 'ملف',
     'media.importing': 'بيستورد الملفات…',
+    'media.standaloneHint':
+      'لو زر «الاستيراد» مافتحش مدير الملفات: افتح ملف acode/index.html في متصفح Chrome للأندرويد (أو شغّل سيرفر محلي) — بعض تطبيقات المعاينة بتمنع اختيار الملفات.',
     'media.addAll': 'أضِف كل الوسائط',
     'media.genMusic': 'توليد موسيقى',
     'media.genMusicDesc': 'موسيقى خلفية مُولَّدة محليًا (WAV)',
@@ -287,6 +289,8 @@ export const dict = {
     'ai.captionPreview': 'معاينة النمط',
     'ai.dictate': 'تفريغ بالصوت (مباشر)',
     'ai.dictateHint': 'يفتح الميكروفون ويفرّغ كلامك إلى كابشن في الوقت الفعلي (متصفح Chrome).',
+    'ai.dictateUnsupported':
+      'التفريغ الصوتي المباشر غير متاح في هذا المتصفح/WebView — استخدم Chrome أو اكتب نص السكربت ووزّعه زمنيًا تلقائيًا.',
     'ai.transcript': 'النص الكامل',
     'ai.generate': 'توليد',
     'ai.tone': 'نبرة الكلام',
@@ -400,6 +404,9 @@ export const dict = {
     'exp.recording': 'بيتم التسجيل… اترك التاب مفتوح',
     'exp.done': 'تم التصدير',
     'exp.download': 'تنزيل الملف',
+    'exp.openFile': 'فتح الملف المصدَّر',
+    'exp.saveHint':
+      'لو التحميل مافتحش (بيحصل في معاينة Acode): اضغط «فتح الملف المصدَّر» أو افتح الصفحة في Chrome.',
     'exp.note':
       'التسجيل يتم في الوقت الحقيقي (مدة المشروع = مدة التصدير)، وكله محليًا بدون رفع. لو سمعت الصوت أثناء التصدير اضبط مستوى النظام.',
     'exp.muteWhileExport': 'اكتم صوت النظام أثناء التصدير',
@@ -561,6 +568,8 @@ export const dict = {
     'media.noAudio': 'No audio',
     'media.files': 'files',
     'media.importing': 'Importing files…',
+    'media.standaloneHint':
+      'If the import button does not open your file manager: open acode/index.html in Chrome for Android (or run a local server) — some preview WebViews block file picking.',
     'media.addAll': 'Add all media',
     'media.genMusic': 'Generate music',
     'media.genMusicDesc': 'Locally generated background music (WAV)',
@@ -740,6 +749,8 @@ export const dict = {
     'ai.captionPreview': 'Style preview',
     'ai.dictate': 'Live dictation (mic)',
     'ai.dictateHint': 'Opens the microphone and transcribes speech into captions in real time (Chrome).',
+    'ai.dictateUnsupported':
+      'Live dictation is not available in this browser/WebView — use Chrome, or paste your script and let it be timed automatically.',
     'ai.transcript': 'Full transcript',
     'ai.generate': 'Generate',
     'ai.tone': 'Tone',
@@ -853,6 +864,8 @@ export const dict = {
     'exp.recording': 'Recording… keep this tab open',
     'exp.done': 'Export finished',
     'exp.download': 'Download file',
+    'exp.openFile': 'Open exported file',
+    'exp.saveHint': 'If nothing downloaded (common in Acode preview): tap “Open exported file” or open the page in Chrome.',
     'exp.note':
       'Recording happens in real time (project length = export time) and is fully local. Mute your system if you do not want to hear it.',
     'exp.muteWhileExport': 'Mute output while exporting',
@@ -917,7 +930,31 @@ export const LANGUAGES = [
 ]
 
 export function detectLang() {
-  const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('laqta.lang') : null
-  if (saved === 'ar' || saved === 'en') return saved
+  try {
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('laqta.lang') : null
+    if (saved === 'ar' || saved === 'en') return saved
+  } catch {
+    /* private mode / blocked storage — fall back to Arabic */
+  }
+  const nav = typeof navigator !== 'undefined' ? navigator.language || '' : ''
+  if (nav && !/^ar/i.test(nav) && !/^en/i.test(nav)) return 'ar'
   return 'ar'
+}
+
+/** localStorage that never throws (file:// WebViews can block it). */
+export const safeStore = {
+  get(key) {
+    try {
+      return localStorage.getItem(key)
+    } catch {
+      return null
+    }
+  },
+  set(key, value) {
+    try {
+      localStorage.setItem(key, value)
+    } catch {
+      /* ignore */
+    }
+  },
 }

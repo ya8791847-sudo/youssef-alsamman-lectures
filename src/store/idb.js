@@ -9,7 +9,13 @@ const STORES = ['projects', 'media', 'meta']
 
 let dbp = null
 
+/** IndexedDB is unavailable in some standalone WebViews (file:// origin). */
+export function storageAvailable() {
+  return typeof indexedDB !== 'undefined' && indexedDB !== null
+}
+
 function open() {
+  if (!storageAvailable()) return Promise.reject(new Error('indexeddb-unavailable'))
   if (dbp) return dbp
   dbp = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
@@ -19,11 +25,13 @@ function open() {
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
+    req.onblocked = () => reject(new Error('indexeddb-blocked'))
   })
   return dbp
 }
 
 async function tx(store, mode, fn) {
+  if (!storageAvailable()) return undefined
   const db = await open()
   return new Promise((resolve, reject) => {
     const t = db.transaction(store, mode)

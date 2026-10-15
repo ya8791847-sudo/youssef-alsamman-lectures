@@ -296,15 +296,49 @@ export function projectToJson(project) {
   return JSON.stringify(clean, null, 2)
 }
 
-export function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob)
+/** True when we are running as a local file (Acode / Android WebView). */
+export function isStandalone() {
+  try {
+    return !!window.__LAQTA_STANDALONE__ || location.protocol === 'file:'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Save a blob to disk. Android WebViews frequently ignore `<a download>` for
+ * blob: URLs, so the standalone build also hands the URL to the system viewer.
+ * Returns the object URL so callers can offer a manual "open file" fallback.
+ */
+export function downloadBlob(blob, filename, { openFallback = isStandalone() } = {}) {
+  let url = ''
+  try {
+    url = URL.createObjectURL(blob)
+  } catch {
+    return ''
+  }
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+  a.rel = 'noopener'
+  a.style.display = 'none'
   document.body.appendChild(a)
-  a.click()
+  try {
+    a.click()
+  } catch {
+    /* ignore */
+  }
   a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  if (openFallback && typeof window.open === 'function') {
+    // if the WebView drops the download, the tab lets the user save/share it
+    try {
+      window.open(url, '_blank', 'noopener')
+    } catch {
+      /* ignore */
+    }
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 120_000)
+  return url
 }
 
 export function extensionFor(mime, fallback = 'webm') {

@@ -171,7 +171,7 @@ class Engine {
     this.rate = rate
     if (this.playing) {
       // re-anchor the clock so the change is seamless
-      this.startClock = audio.ctx().currentTime
+      this.startClock = this.currentClock()
       this.startTime = this.time
     }
     this.applyPlaybackRates()
@@ -183,11 +183,16 @@ class Engine {
     const d = totalDuration(this.project)
     this.duration = d
     if (this.time >= d - 0.02) this.time = 0
-    audio.master()
-    audio.setMasterVolume(this.project.settings?.masterVolume ?? 1)
+    try {
+      audio.master()
+      audio.setMasterVolume(this.project.settings?.masterVolume ?? 1)
+    } catch {
+      // Web Audio is not available (some WebViews) — silent playback still works
+      this.audioDisabled = true
+    }
     this.syncAssets()
     this.playing = true
-    this.startClock = audio.ctx().currentTime
+    this.startClock = this.currentClock()
     this.startTime = this.time
     this.syncMedia(true)
     this.emitState()
@@ -219,7 +224,7 @@ class Engine {
     const clamped = Math.max(0, Math.min(this.duration - 0.001, t))
     this.time = clamped
     if (this.playing) {
-      this.startClock = audio.ctx().currentTime
+      this.startClock = this.currentClock()
       this.startTime = clamped
       this.syncMedia(syncAudio)
     } else {
@@ -250,8 +255,12 @@ class Engine {
   }
 
   currentClock() {
-    const c = audio.ctx()
-    if (c.state === 'running') return c.currentTime
+    try {
+      const c = audio.ctx()
+      if (c && c.state === 'running') return c.currentTime
+    } catch {
+      /* fall through to the wall clock */
+    }
     return performance.now() / 1000
   }
 
@@ -356,7 +365,13 @@ class Engine {
         if (Math.abs(el.playbackRate - wantRate) > 0.001) el.playbackRate = wantRate
         // attach once for Web Audio routing
         const voiceFx = clip.audio?.voiceFx?.fx || {}
-        audio.attachMedia(mediaId, el, { voiceFx, volume: 1, pan: 0 })
+        if (!this.audioDisabled) {
+          try {
+            audio.attachMedia(mediaId, el, { voiceFx, volume: 1, pan: 0 })
+          } catch {
+            this.audioDisabled = true
+          }
+        }
         // live gain: clip volume × track volume × fades × ducking
         let gain = clip.audio?.volume ?? 1
         for (const tr of tracks) {
@@ -368,8 +383,14 @@ class Engine {
         if (fi > 0 && local < fi) gain *= Math.max(0, local / fi)
         if (fo > 0 && local > clip.duration - fo) gain *= Math.max(0, (clip.duration - local) / fo)
         if (project.settings?.ducking && a.kind === 'audio' && this.voiceActive()) gain *= 0.32
-        audio.setLiveGain(mediaId, gain)
-        audio.setLivePan(mediaId, clip.audio?.pan || 0)
+        if (!this.audioDisabled) {
+          try {
+            audio.setLiveGain(mediaId, gain)
+            audio.setLivePan(mediaId, clip.audio?.pan || 0)
+          } catch {
+            /* ignore */
+          }
+        }
       } else {
         try {
           el.pause()
@@ -436,7 +457,11 @@ class Engine {
   }
 
   level() {
-    return audio.level()
+    try {
+      return audio.level()
+    } catch {
+      return 0
+    }
   }
 
   dispose() {

@@ -7,6 +7,19 @@ import { useStore, patchUi, toast, setBusy, setProgress } from '../../store/stor
 import * as A from '../../store/editorActions.js'
 import { Icon, EmptyNote } from '../ui.jsx'
 
+function standaloneTouch() {
+  try {
+    return (
+      !!window.__LAQTA_STANDALONE__ &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(pointer: coarse)').matches &&
+      !navigator.mediaDevices
+    )
+  } catch {
+    return false
+  }
+}
+
 export default function MediaPanel() {
   const { t, lang } = useI18n()
   const project = useStore((s) => s.project)
@@ -107,6 +120,11 @@ export default function MediaPanel() {
       </div>
 
       <div className="panel-body">
+        {standaloneTouch() ? (
+          <div className="notice-box" style={{ marginBottom: 10 }}>
+            {t('media.standaloneHint')}
+          </div>
+        ) : null}
         <div
           className={`dropzone ${over ? 'over' : ''}`}
           onClick={() => fileRef.current?.click()}
