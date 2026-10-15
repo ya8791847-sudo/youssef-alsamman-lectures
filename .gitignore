@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+.vite/
+test/.bundle.mjs
+test/.dom-bundle.mjs
+test/.dbg.mjs
+test/.acode-dbg*.mjs
+acode/.cache/
