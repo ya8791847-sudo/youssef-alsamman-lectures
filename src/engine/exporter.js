@@ -296,6 +296,34 @@ export function projectToJson(project) {
   return JSON.stringify(clean, null, 2)
 }
 
+/**
+ * Share a produced file through the OS share sheet (Android / iOS).
+ * Falls back silently when the platform has no Web Share support.
+ */
+export function canShareFiles() {
+  try {
+    return (
+      typeof navigator !== 'undefined' &&
+      typeof File === 'function' &&
+      typeof navigator.share === 'function' &&
+      typeof navigator.canShare === 'function'
+    )
+  } catch {
+    return false
+  }
+}
+
+export async function shareBlob(blob, filename, title = '') {
+  if (!canShareFiles()) throw new Error('share-unavailable')
+  const type = blob.type || 'application/octet-stream'
+  const file = new File([blob], filename, { type })
+  if (navigator.canShare({ files: [file] })) {
+    await navigator.share({ files: [file], title })
+    return true
+  }
+  throw new Error('share-unavailable')
+}
+
 /** True when we are running as a local file (Acode / Android WebView). */
 export function isStandalone() {
   try {

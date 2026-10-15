@@ -10,6 +10,8 @@ import {
   projectToJson,
   downloadBlob,
   isStandalone,
+  canShareFiles,
+  shareBlob,
   recorderSupported,
   bestVideoMime,
   estimateSize,
@@ -32,6 +34,7 @@ export default function ExportPanel() {
   const [result, setResult] = useState(null)
   const [job, setJob] = useState(null)
   const [savedUrl, setSavedUrl] = useState('')
+  const [sharing, setSharing] = useState(false)
 
   if (!project) return null
   const duration = totalDuration(project)
@@ -214,6 +217,26 @@ export default function ExportPanel() {
             >
               <Icon name="download" size={13} /> {t('exp.download')}
             </button>
+            {canShareFiles() ? (
+              <button
+                className="btn sm block"
+                style={{ marginTop: 6 }}
+                disabled={sharing}
+                onClick={async () => {
+                  const ext = result.kind === 'video' ? (result.mime?.includes('mp4') ? 'mp4' : 'webm') : result.kind === 'audio' ? 'wav' : 'png'
+                  setSharing(true)
+                  try {
+                    await shareBlob(result.blob, `${project.name}.${ext}`, project.name)
+                  } catch (e) {
+                    if (e?.name !== 'AbortError') toast('err.share', 'err')
+                  } finally {
+                    setSharing(false)
+                  }
+                }}
+              >
+                <Icon name="upload" size={13} /> {sharing ? t('common.working') : t('exp.share')}
+              </button>
+            ) : null}
             {savedUrl ? (
               <>
                 {isStandalone() ? <div className="tiny muted" style={{ marginTop: 6 }}>{t('exp.saveHint')}</div> : null}

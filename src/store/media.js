@@ -56,6 +56,16 @@ export function releaseMedia(id) {
 
 /* ------------------------------- probing ---------------------------------- */
 
+/** Reject if a probe takes too long — a stuck WebView must not freeze the import. */
+function withTimeout(promise, ms, label = 'timeout') {
+  let timer = null
+  const guard = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(label)), ms)
+    if (timer.unref) timer.unref()
+  })
+  return Promise.race([promise, guard]).finally(() => clearTimeout(timer))
+}
+
 function loadEl(src, kind) {
   return new Promise((resolve, reject) => {
     const el = kind === 'audio' ? document.createElement('audio') : document.createElement('video')
@@ -73,12 +83,16 @@ export async function probe(blob, kind, url) {
   const out = { duration: 0, width: 0, height: 0, hasAudio: kind === 'audio', poster: null }
   if (kind === 'image') {
     try {
-      const img = await new Promise((res, rej) => {
-        const i = new Image()
-        i.onload = () => res(i)
-        i.onerror = () => rej(new Error('img-load-failed'))
-        i.src = url
-      })
+      const img = await withTimeout(
+        new Promise((res, rej) => {
+          const i = new Image()
+          i.onload = () => res(i)
+          i.onerror = () => rej(new Error('img-load-failed'))
+          i.src = url
+        }),
+        8000,
+        'img-load-timeout',
+      )
       out.width = img.naturalWidth
       out.height = img.naturalHeight
       const c = document.createElement('canvas')
@@ -95,7 +109,7 @@ export async function probe(blob, kind, url) {
   }
 
   try {
-    const el = await loadEl(url, kind)
+    const el = await withTimeout(loadEl(url, kind), 12000, 'media-load-timeout')
     out.duration = isFinite(el.duration) ? el.duration : 0
     if (kind === 'video') {
       out.width = el.videoWidth

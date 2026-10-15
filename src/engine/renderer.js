@@ -6,7 +6,7 @@
  * Used live by the player and offline by the exporter.
  */
 
-import { DEFAULT_CLIP_FX, DEFAULT_ADJ } from './presets.js'
+import { DEFAULT_ADJ } from './presets.js'
 
 const ARABIC_RE = /[\u0600-\u06FF\u0750-\u077F]/
 

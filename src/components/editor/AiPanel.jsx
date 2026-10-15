@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useI18n } from '../../i18n/index.jsx'
 import { TOOLS, runTool, dictationSupported, startDictation, setProgressHandler } from '../../engine/ai/tools.js'
 import { ask, describeRequest } from '../../engine/ai/copilot.js'

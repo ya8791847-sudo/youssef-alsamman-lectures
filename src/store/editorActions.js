@@ -37,7 +37,7 @@ export function addMedia(mediaList) {
   commit((p) => {
     p.media = [...(p.media || []), ...mediaList]
     return p
-  })
+  }, { label: 'media' })
 }
 
 export function updateMedia(mediaId, patch) {
@@ -45,7 +45,7 @@ export function updateMedia(mediaId, patch) {
     const m = p.media.find((x) => x.id === mediaId)
     if (m) Object.assign(m, patch)
     return p
-  })
+  }, { label: 'media' })
 }
 
 export function removeMedia(mediaId) {
@@ -53,7 +53,7 @@ export function removeMedia(mediaId) {
     p.media = p.media.filter((m) => m.id !== mediaId)
     for (const t of p.tracks) t.clips = t.clips.filter((c) => c.mediaId !== mediaId)
     return p
-  })
+  }, { label: 'media' })
 }
 
 /** Insert media on the right track, appending at the end by default. */
@@ -79,7 +79,7 @@ export function addMediaToTimeline(mediaId, { trackId = null, at = null, duratio
     const tr = draft.tracks.find((t) => t.id === track.id)
     placeClip(tr, clip)
     return draft
-  })
+  }, { label: 'clip' })
   patchUi({ selection: [clip.id], selectedMedia: mediaId })
   return clip
 }
@@ -104,20 +104,22 @@ export function addAllMedia() {
       created++
     }
     return draft
-  })
+  }, { label: 'clip' })
   if (created) toast(`${created}`, 'ok')
 }
 
 /* -------------------------------- clips ----------------------------------- */
 
 export function updateClip(clipId, patch, { silent = false } = {}) {
-  commit((p) => {
-    const { clip } = findClip(p, clipId)
-    if (!clip) return p
-    Object.assign(clip, typeof patch === 'function' ? patch(clip) : patch)
-    return p
-  })
-  if (!silent) void 0
+  commit(
+    (p) => {
+      const { clip } = findClip(p, clipId)
+      if (!clip) return p
+      Object.assign(clip, typeof patch === 'function' ? patch(clip) : patch)
+      return p
+    },
+    { history: !silent, label: 'clip' },
+  )
 }
 
 export function updateClipDeep(clipId, path, value) {
@@ -132,7 +134,7 @@ export function updateClipDeep(clipId, path, value) {
     }
     obj[keys[keys.length - 1]] = value
     return p
-  })
+  }, { label: 'clip' })
 }
 
 export function updateSelected(patch, path = null) {
@@ -154,7 +156,7 @@ export function updateSelected(patch, path = null) {
       }
     }
     return p
-  })
+  }, { label: 'clip' })
 }
 
 export function addTextClip(opts = {}) {
@@ -167,7 +169,7 @@ export function addTextClip(opts = {}) {
     tr.clips.push(clip)
     sortClips(tr)
     return draft
-  })
+  }, { label: 'text' })
   patchUi({ selection: [clip.id] })
   return clip
 }
@@ -175,7 +177,7 @@ export function addTextClip(opts = {}) {
 export function removeClips(ids = null, { ripple = false } = {}) {
   const target = ids || getState().ui.selection
   if (!target.length) return
-  commit((p) => removeClipsFromTracks(p, target, { ripple }))
+  commit((p) => removeClipsFromTracks(p, target, { ripple }), { label: 'delete' })
   patchUi({ selection: [] })
 }
 
@@ -195,7 +197,7 @@ export function duplicateClips(ids = null) {
       sortClips(t)
     }
     return p
-  })
+  }, { label: 'duplicate' })
   patchUi({ selection: newIds })
 }
 
@@ -207,7 +209,7 @@ export function splitAt(time, { all = true } = {}) {
     const list = splitClipAt(p, time, all ? {} : { onlySelected: sel })
     created.push(...list)
     return p
-  })
+  }, { label: 'split' })
   if (created.length) patchUi({ selection: created.map((c) => c.id) })
   return created
 }
@@ -240,7 +242,7 @@ export function moveClip(clipId, { start, trackId = null }, { history = true } =
       }
       return p
     },
-    { history },
+    { history, label: 'move' },
   )
 }
 
@@ -259,7 +261,7 @@ export function trimClip(clipId, { start, duration, srcStart = null }, { history
       }
       return p
     },
-    { history },
+    { history, label: 'trim' },
   )
 }
 
@@ -271,7 +273,7 @@ export function setClipSpeed(clipId, speed) {
     clip.speed = local
     if (clip.srcStart != null) clip.srcEnd = clip.srcStart + clip.duration * local
     return p
-  })
+  }, { label: 'speed' })
 }
 
 export function setTransition(clipId, side, type, dur) {
@@ -281,7 +283,7 @@ export function setTransition(clipId, side, type, dur) {
     clip.transitions = clip.transitions || {}
     clip.transitions[side] = { type, dur: dur ?? clip.transitions?.[side]?.dur ?? 0.4 }
     return p
-  })
+  }, { label: 'transition' })
 }
 
 export function applyFilter(clipIds, filterId) {
@@ -294,7 +296,7 @@ export function applyFilter(clipIds, filterId) {
       clip.filterId = filterId
     }
     return p
-  })
+  }, { label: 'filter' })
 }
 
 export function applyMotion(clipIds, kf) {
@@ -305,7 +307,7 @@ export function applyMotion(clipIds, kf) {
       clip.kf = { ...(clip.kf || {}), ...JSON.parse(JSON.stringify(kf)) }
     }
     return p
-  })
+  }, { label: 'motion' })
 }
 
 export function addKeyframe(clipIds, prop, time, value) {
@@ -322,7 +324,7 @@ export function addKeyframe(clipIds, prop, time, value) {
       clip.kf[prop] = list
     }
     return p
-  })
+  }, { label: 'keyframe' })
 }
 
 export function removeKeyframe(clipIds, prop, norm) {
@@ -334,7 +336,7 @@ export function removeKeyframe(clipIds, prop, norm) {
       if (!clip.kf[prop].length) delete clip.kf[prop]
     }
     return p
-  })
+  }, { label: 'keyframe' })
 }
 
 export function clearKeyframes(clipIds, prop = null) {
@@ -346,7 +348,7 @@ export function clearKeyframes(clipIds, prop = null) {
       else clip.kf = {}
     }
     return p
-  })
+  }, { label: 'keyframe' })
 }
 
 /** Convert current transform values across keyframes into a static bake. */
@@ -369,7 +371,7 @@ export function bakeKeyframes(clipIds) {
       clip.kf = {}
     }
     return p
-  })
+  }, { label: 'keyframe' })
 }
 
 /* -------------------------------- tracks ---------------------------------- */
@@ -378,14 +380,14 @@ export function addTrack(kind = 'overlay', name = null) {
   commit((p) => {
     p.tracks.push(newTrack(kind, name || (kind === 'text' ? 'نصوص' : kind === 'audio' ? 'صوت' : 'طبقة')))
     return p
-  })
+  }, { label: 'track' })
 }
 
 export function removeTrack(trackId) {
   commit((p) => {
     p.tracks = p.tracks.filter((t) => t.id !== trackId)
     return p
-  })
+  }, { label: 'track' })
 }
 
 export function toggleTrack(trackId, prop) {
@@ -394,7 +396,7 @@ export function toggleTrack(trackId, prop) {
     if (!t) return p
     t[prop] = !t[prop]
     return p
-  })
+  }, { label: 'track' })
 }
 
 export function setTrackVolume(trackId, v) {
@@ -402,7 +404,7 @@ export function setTrackVolume(trackId, v) {
     const t = p.tracks.find((x) => x.id === trackId)
     if (t) t.volume = v
     return p
-  })
+  }, { label: 'audio' })
 }
 
 /* ------------------------------- captions --------------------------------- */
@@ -413,7 +415,7 @@ export function setCaptions(list) {
       .map((c) => ({ id: c.id || uid('cap'), start: +c.start.toFixed(3), end: +c.end.toFixed(3), text: c.text, words: c.words || null }))
       .sort((a, b) => a.start - b.start)
     return p
-  })
+  }, { label: 'caption' })
 }
 
 export function addCaption(cue = {}) {
@@ -423,7 +425,7 @@ export function addCaption(cue = {}) {
   commit((draft) => {
     draft.captions = [...draft.captions, cue2].sort((a, b) => a.start - b.start)
     return draft
-  })
+  }, { label: 'caption' })
   return cue2
 }
 
@@ -434,21 +436,21 @@ export function updateCaption(id, patch) {
     Object.assign(c, patch)
     p.captions.sort((a, b) => a.start - b.start)
     return p
-  })
+  }, { label: 'caption' })
 }
 
 export function removeCaption(id) {
   commit((p) => {
     p.captions = p.captions.filter((c) => c.id !== id)
     return p
-  })
+  }, { label: 'caption' })
 }
 
 export function shiftCaptions(dt) {
   commit((p) => {
     p.captions = p.captions.map((c) => ({ ...c, start: Math.max(0, c.start + dt), end: Math.max(0.2, c.end + dt) }))
     return p
-  })
+  }, { label: 'caption' })
 }
 
 export function mergeCaptions(maxGap = 0.35) {
@@ -464,7 +466,7 @@ export function mergeCaptions(maxGap = 0.35) {
     }
     p.captions = out
     return p
-  })
+  }, { label: 'caption' })
 }
 
 export function splitLongCaptions(maxChars = 42, maxDur = 3.2) {
@@ -497,14 +499,14 @@ export function splitLongCaptions(maxChars = 42, maxDur = 3.2) {
     }
     p.captions = out
     return p
-  })
+  }, { label: 'caption' })
 }
 
 export function setCaptionStyle(patch) {
   commit((p) => {
     p.captionStyle = { ...p.captionStyle, ...patch }
     return p
-  })
+  }, { label: 'caption' })
 }
 
 /* ------------------------------- markers ---------------------------------- */
@@ -513,7 +515,7 @@ export function addMarker(t, label = '') {
   commit((p) => {
     p.markers = [...(p.markers || []), { id: uid('mk'), t: +t.toFixed(3), label }].sort((a, b) => a.t - b.t)
     return p
-  })
+  }, { label: 'marker' })
 }
 
 export function clearMarkers(kind = null) {
@@ -521,28 +523,28 @@ export function clearMarkers(kind = null) {
     if (!kind) p.markers = []
     else p.markers = (p.markers || []).filter((m) => m.kind !== kind)
     return p
-  })
+  }, { label: 'marker' })
 }
 
 export function setAnalysis(patch) {
   commit((p) => {
     p.analysis = { ...p.analysis, ...patch }
     return p
-  })
+  }, { label: 'analysis' })
 }
 
 export function updateSettings(patch) {
   commit((p) => {
     p.settings = { ...p.settings, ...patch }
     return p
-  })
+  }, { label: 'settings' })
 }
 
 export function renameProject(name) {
   commit((p) => {
     p.name = name
     return p
-  })
+  }, { label: 'rename' })
 }
 
 export function setProjectFormat({ width, height, aspect, fps }) {
@@ -552,7 +554,7 @@ export function setProjectFormat({ width, height, aspect, fps }) {
     if (aspect) p.aspect = aspect
     if (fps) p.fps = fps
     return p
-  })
+  }, { label: 'format' })
 }
 
 export function duration() {
@@ -562,6 +564,6 @@ export function duration() {
 
 /** Replace the whole timeline (used by AI tools: highlight, reels version…) */
 export function replaceTimeline(mutator) {
-  commit((p) => mutator(p))
+  commit((p) => mutator(p), { label: 'ai' })
   patchUi({ selection: [] })
 }

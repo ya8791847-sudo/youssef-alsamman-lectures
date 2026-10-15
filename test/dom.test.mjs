@@ -229,6 +229,13 @@ window.HTMLMediaElement.prototype.play = function () {
 window.HTMLMediaElement.prototype.pause = function () {}
 window.HTMLMediaElement.prototype.load = function () {}
 
+/* jsdom ships no object-URL store — the app uses it for generated media */
+if (typeof window.URL.createObjectURL !== 'function') {
+  let seq = 0
+  window.URL.createObjectURL = () => `blob:jsdom/${++seq}`
+  window.URL.revokeObjectURL = () => {}
+}
+
 let pass = 0
 let fail = 0
 const lines = []
@@ -416,6 +423,85 @@ await test('splitting at the playhead creates two clips', async () => {
   })
   const track = store.getState().project.tracks.find((t) => t.kind === 'video')
   assert.ok(track.clips.length >= 2)
+})
+
+await test('undo/redo carry a human label for the action', async () => {
+  const stamp = () => store.getState().history
+  await act(async () => {
+    editorActions.addTextClip({ start: 0, duration: 1.5, text: 'عنوان للتسمية' })
+  })
+  assert.equal(store.getState().lastLabel, 'text')
+  assert.equal(store.undoLabel(), 'text')
+  const before = stamp()
+  await act(async () => {
+    store.undo()
+  })
+  const afterUndo = stamp()
+  assert.equal(afterUndo.pastLabels.length, before.pastLabels.length - 1)
+  assert.equal(afterUndo.futureLabels[0], 'text')
+  await act(async () => {
+    store.redo()
+  })
+  const afterRedo = stamp()
+  assert.equal(afterRedo.pastLabels[afterRedo.pastLabels.length - 1], 'text')
+  assert.equal(afterRedo.futureLabels.length, 0)
+})
+
+await test('undo announces what it reversed (toast with the action name)', async () => {
+  await act(async () => {
+    editorActions.addTextClip({ start: 4, duration: 1.5, text: 'عنوان تاني' })
+  })
+  await act(async () => {
+    store.undo()
+  })
+  const toasts = store.getState().toasts
+  assert.ok(toasts.some((x) => x.title === 'hist.text' && x.message === 'toast.undone'), `toasts: ${JSON.stringify(toasts)}`)
+})
+
+await test('the empty timeline offers a start hint that disappears with the first clip', async () => {
+  await act(async () => {
+    store.createProject({ name: 'مشروع فاضي', width: 1280, height: 720, fps: 30 })
+  })
+  const hint = container.querySelector('.tl-hint')
+  assert.ok(hint, 'start hint rendered on an empty project')
+  assert.ok(hint.querySelector('button'), 'hint is actionable')
+  await act(async () => {
+    editorActions.addMedia([{ id: 'med_empty', name: 'صورة', kind: 'image', duration: 5, url: 'blob:fake', width: 1280, height: 720 }])
+    editorActions.addMediaToTimeline('med_empty', { duration: 5 })
+  })
+  assert.equal(container.querySelector('.tl-hint'), null, 'hint gone after the first clip')
+})
+
+await test('modals are accessible (aria-modal, escape, focus inside)', async () => {
+  await act(async () => {
+    store.patchUi({ showShortcuts: true })
+  })
+  const dialog = container.querySelector('[role="dialog"]')
+  assert.ok(dialog, 'dialog rendered')
+  assert.equal(dialog.getAttribute('aria-modal'), 'true')
+  assert.ok(dialog.contains(document.activeElement), 'focus moved inside the dialog')
+  await act(async () => {
+    window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }))
+  })
+  assert.equal(container.querySelector('[role="dialog"]'), null, 'escape closed the dialog')
+})
+
+await test('share helpers degrade gracefully without Web Share', async () => {
+  const { canShareFiles, shareBlob } = await import('../src/engine/exporter.js')
+  assert.equal(canShareFiles(), false)
+  await assert.rejects(() => shareBlob(new window.Blob(['x']), 'a.webm'), /share-unavailable/)
+})
+
+await test('editor preferences are remembered between sessions', async () => {
+  await act(async () => {
+    store.patchUi({ zoom: 123, snap: false })
+  })
+  await new Promise((r) => setTimeout(r, 550))
+  const raw = window.localStorage.getItem('laqta.ui')
+  assert.ok(raw, 'prefs written')
+  const prefs = JSON.parse(raw)
+  assert.equal(prefs.zoom, 123)
+  assert.equal(prefs.snap, false)
 })
 
 console.log(lines.join('\n'))
