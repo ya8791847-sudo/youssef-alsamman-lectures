@@ -774,11 +774,50 @@ html[dir='rtl'] .switch.on::after {
 
 /* ------------------------------ timeline -------------------------------- */
 .timeline {
+  position: relative;
   height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--bg-2);
   min-height: 0;
+}
+.tl-hint {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  top: 54%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100% - 32px));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px dashed var(--line-2, rgba(255, 255, 255, 0.16));
+  border-radius: 14px;
+  background: rgba(17, 21, 36, 0.92);
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  backdrop-filter: blur(3px);
+  pointer-events: none;
+  animation: fadeUp 0.28s ease both;
+}
+.tl-hint .ico {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 10px;
+  background: linear-gradient(120deg, rgba(94, 231, 255, 0.18), rgba(255, 95, 162, 0.18));
+  color: var(--accent, #6ee7ff);
+}
+.tl-hint button {
+  pointer-events: auto;
+}
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 10px));
+  }
 }
 .tl-toolbar {
   flex: none;
@@ -1877,5 +1916,66 @@ html[dir='ltr'] .tooltip-host:hover::after {
   }
   .modal-body {
     padding: 12px;
+  }
+}
+
+/* ------------------------- polish & device comfort ----------------------- */
+button,
+.btn,
+.tab,
+.select,
+input,
+summary {
+  touch-action: manipulation; /* no double-tap zoom on phones */
+  -webkit-tap-highlight-color: transparent;
+}
+input[type='range'] {
+  touch-action: pan-y;
+}
+.panel-body,
+.modal-body,
+.tl-scroll,
+.dash {
+  overscroll-behavior: contain; /* stop scroll chaining inside panels */
+}
+.ellipsis,
+.clip-label,
+.th-name span {
+  text-overflow: ellipsis;
+}
+/* never let a long Arabic string break the layout */
+.tl-clip .clip-label {
+  overflow: hidden;
+  white-space: nowrap;
+}
+@media (pointer: coarse) {
+  /* notch / gesture-bar safe areas for the standalone (Acode) build */
+  .mobile-tabs {
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
+  }
+  .dash {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom));
+  }
+  .topbar {
+    padding-inline-start: max(10px, env(safe-area-inset-left));
+    padding-inline-end: max(10px, env(safe-area-inset-right));
+  }
+  .tl-hint {
+    width: calc(100% - 20px);
+  }
+}
+@media (hover: none) {
+  /* hover-only affordances are useless on touch — keep them visible */
+  .media-card .actions {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
 }

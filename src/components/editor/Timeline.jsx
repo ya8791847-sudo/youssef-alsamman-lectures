@@ -224,6 +224,8 @@ export default function Timeline() {
 
   const totalWidth = Math.max(duration * zoom + 400, 700)
   const showBeatMarkers = (project.markers || []).some((m) => m.kind === 'beat')
+  const hasClips = project.tracks.some((t) => t.clips.length > 0)
+  const hasMedia = (project.media || []).length > 0
 
   return (
     <div className="timeline" tabIndex={0} onKeyDown={onKeyDown}>
@@ -234,14 +236,14 @@ export default function Timeline() {
         <button className="btn sm" onClick={() => A.removeClips(selected)} disabled={!selected.length} title={t('shot.delete')}>
           <Icon name="trash" size={13} /> {t('tl.delete')}
         </button>
-        <button className="btn sm" onClick={() => A.removeClips(selected, { ripple: true })} disabled={!selected.length}>
+        <button className="btn sm" onClick={() => A.removeClips(selected, { ripple: true })} disabled={!selected.length} title={t('tl.ripple')}>
           {t('tl.ripple')}
         </button>
         <button className="btn sm" onClick={() => A.duplicateClips(selected)} disabled={!selected.length} title={t('shot.duplicate')}>
           <Icon name="copy" size={13} /> {t('tl.duplicate')}
         </button>
-        <button className="btn sm" onClick={() => A.addTextClip({ start: engine.time, duration: 3 })}>
-          <Icon name="text" size={13} /> {t('editor.captions')}
+        <button className="btn sm" onClick={() => A.addTextClip({ start: engine.time, duration: 3 })} title={t('tl.addText')}>
+          <Icon name="text" size={13} /> {t('tl.addText')}
         </button>
         <button className="btn sm" onClick={() => A.addMarker(engine.time, '★')} title={t('shot.marker')}>
           <Icon name="target" size={13} /> {t('tl.marker')}
@@ -250,16 +252,37 @@ export default function Timeline() {
         <button className={`btn sm ${ui.snap ? 'active' : ''}`} onClick={() => patchUi({ snap: !ui.snap })} title={t('shot.snapToggle')}>
           <Icon name="grid" size={13} /> {t('tl.snap')}
         </button>
-        <button className={`btn sm ${ui.autoScroll ? 'active' : ''}`} onClick={() => patchUi({ autoScroll: !ui.autoScroll })}>
+        <button
+          className={`btn sm ${ui.autoScroll ? 'active' : ''}`}
+          onClick={() => patchUi({ autoScroll: !ui.autoScroll })}
+          title={t('tl.autoScroll')}
+        >
           {t('tl.autoScroll')}
+        </button>
+        <button
+          className="btn sm ghost"
+          onClick={() => patchUi({ timelineCollapsed: true })}
+          title={t('tl.collapse')}
+          aria-label={t('tl.collapse')}
+        >
+          <Icon name="chevronDown" size={13} />
         </button>
         <div className="grow" />
         <span className="tiny muted mono">{fmtTime(engine.time, { frames: 1, fps: project.fps })}</span>
-        <button className="btn icon sm" onClick={() => A.ui.zoom(zoom / 1.25)} title={t('tl.zoomOut')}>
+        <button className="btn icon sm" onClick={() => A.ui.zoom(zoom / 1.25)} title={t('tl.zoomOut')} aria-label={t('tl.zoomOut')}>
           <Icon name="zoomOut" size={14} />
         </button>
-        <input type="range" min="8" max="400" value={zoom} onChange={(e) => A.ui.zoom(parseFloat(e.target.value))} style={{ width: 110 }} title={t('tl.zoomIn')} />
-        <button className="btn icon sm" onClick={() => A.ui.zoom(zoom * 1.25)} title={t('tl.zoomIn')}>
+        <input
+          type="range"
+          min="8"
+          max="400"
+          value={zoom}
+          onChange={(e) => A.ui.zoom(parseFloat(e.target.value))}
+          style={{ width: 110 }}
+          title={t('tl.zoom')}
+          aria-label={t('tl.zoom')}
+        />
+        <button className="btn icon sm" onClick={() => A.ui.zoom(zoom * 1.25)} title={t('tl.zoomIn')} aria-label={t('tl.zoomIn')}>
           <Icon name="zoomIn" size={14} />
         </button>
         <button
@@ -280,6 +303,28 @@ export default function Timeline() {
           <Icon name="plus" size={13} /> {t('tl.addTrack')}
         </button>
       </div>
+
+      {!hasClips ? (
+        <div className="tl-hint">
+          <span className="ico">
+            <Icon name="sparkles" size={16} />
+          </span>
+          <div className="col gap-4 grow">
+            <b>{t('tl.startTitle')}</b>
+            <span className="tiny muted">{t('tl.startDesc')}</span>
+          </div>
+          <div className="row gap-6 wrap">
+            {hasMedia ? (
+              <button className="btn sm primary" onClick={() => A.addAllMedia()}>
+                {t('media.addAll')}
+              </button>
+            ) : null}
+            <button className="btn sm" onClick={() => A.ui.tab('media')}>
+              <Icon name="folder" size={13} /> {t('editor.media')}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="tl-scroll" ref={scrollRef} onWheel={onWheel} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
         <div className="tl-inner" ref={innerRef} style={{ width: totalWidth }}>
@@ -317,16 +362,16 @@ export default function Timeline() {
                   </span>
                 </div>
                 <div className="th-actions">
-                  <button className={track.hidden ? '' : 'on'} onClick={() => A.toggleTrack(track.id, 'hidden')} title={t('tl.hide')}>
+                  <button className={track.hidden ? '' : 'on'} onClick={() => A.toggleTrack(track.id, 'hidden')} title={t('tl.hide')} aria-label={t('tl.hide')}>
                     <Icon name={track.hidden ? 'eyeOff' : 'eye'} size={12} />
                   </button>
-                  <button className={track.muted ? 'on' : ''} onClick={() => A.toggleTrack(track.id, 'muted')} title={t('tl.mute')}>
+                  <button className={track.muted ? 'on' : ''} onClick={() => A.toggleTrack(track.id, 'muted')} title={t('tl.mute')} aria-label={t('tl.mute')}>
                     <Icon name={track.muted ? 'volumeOff' : 'volume'} size={12} />
                   </button>
-                  <button className={track.locked ? 'on' : ''} onClick={() => A.toggleTrack(track.id, 'locked')} title={t('tl.lock')}>
+                  <button className={track.locked ? 'on' : ''} onClick={() => A.toggleTrack(track.id, 'locked')} title={t('tl.lock')} aria-label={t('tl.lock')}>
                     <Icon name={track.locked ? 'lock' : 'unlock'} size={12} />
                   </button>
-                  <button onClick={() => A.removeTrack(track.id)} title={t('common.delete')}>
+                  <button onClick={() => A.removeTrack(track.id)} title={t('common.delete')} aria-label={t('common.delete')}>
                     <Icon name="close" size={12} />
                   </button>
                 </div>

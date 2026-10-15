@@ -9,7 +9,8 @@ import { Icon } from '../ui.jsx'
 export default function Stage() {
   const { t } = useI18n()
   const project = useStore((s) => s.project)
-  const ui = useStore((s) => s.ui)
+  const analyzing = useStore((s) => s.ui.analyzing)
+  const timelineCollapsed = useStore((s) => s.ui.timelineCollapsed)
   const wrapRef = useRef(null)
   const holderRef = useRef(null)
   const canvasRef = useRef(null)
@@ -17,7 +18,7 @@ export default function Stage() {
   const [playing, setPlaying] = useState(false)
   const [rate, setRate] = useState(1)
   const [mute, setMute] = useState(false)
-  const [meter, setMeter] = useState(0)
+  const meterRef = useRef(null)
   const [volume, setVolume] = useState(project?.settings?.masterVolume ?? 1)
   const [fit, setFit] = useState('fit')
 
@@ -45,15 +46,20 @@ export default function Stage() {
     timeRef.current.textContent = `${fmtTime(engine.time, { frames: 1, fps: project?.fps || 30 })} / ${fmtTime(engine.duration)}`
   })
 
-  // level meter
+  // level meter — written directly to the DOM so playback never re-renders the stage
   useEffect(() => {
     let raf = 0
-    const loop = () => {
+    let level = 0
+    let last = 0
+    const loop = (now) => {
       raf = requestAnimationFrame(loop)
-      setMeter((m) => {
-        const v = audio.level()
-        return v > m ? v : m * 0.86
-      })
+      // when idle, refresh at ~12fps instead of 60fps (battery on phones)
+      if (!engine.playing && now - last < 80) return
+      last = now
+      const v = audio.level()
+      level = v > level ? v : level * 0.86
+      const el = meterRef.current
+      if (el) el.style.width = `${Math.min(100, level * 130)}%`
     }
     raf = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(raf)
@@ -119,8 +125,21 @@ export default function Stage() {
     <div className="stage">
       <div className="stage-view" ref={wrapRef}>
         <div className="canvas-wrap checker" ref={holderRef} style={{ position: 'relative' }}>
-          <canvas ref={canvasRef} onClick={togglePlay} style={{ cursor: 'pointer' }} />
-          <div className="stage-overlay-badges">
+          <canvas
+            ref={canvasRef}
+            onClick={togglePlay}
+            style={{ cursor: 'pointer' }}
+            role="button"
+            tabIndex={0}
+            aria-label={t('shot.playPause')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                togglePlay()
+              }
+            }}
+          />
+          <div className="stage-overlay-badges" aria-hidden="true">
             <span className="chip">
               <Icon name="film" size={11} /> {project.width}×{project.height}
             </span>
@@ -130,7 +149,7 @@ export default function Stage() {
                 <Icon name="play" size={10} fill /> {t('shot.playPause').split('(')[0]}
               </span>
             ) : null}
-            {ui.analyzing ? (
+            {analyzing ? (
               <span className="chip pink pulse">
                 <Icon name="sparkles" size={11} /> {t('common.working')}
               </span>
@@ -140,19 +159,19 @@ export default function Stage() {
       </div>
 
       <div className="transport">
-        <button className="btn icon" title={t('shot.prevClip')} onClick={() => engine.seek(Math.max(0, engine.time - 1))}>
+        <button className="btn icon" title={t('cap.start')} aria-label={t('cap.start')} onClick={() => engine.seek(0)}>
           <Icon name="undo" size={15} />
         </button>
-        <button className="btn icon" onClick={() => engine.seek(engine.time - 1 / (project.fps || 30))}>
+        <button className="btn icon" title={t('shot.frameStep')} aria-label={t('shot.frameStep')} onClick={() => engine.stepFrame(-1)}>
           <Icon name="chevronRight" size={15} style={{ transform: 'rotate(180deg)' }} />
         </button>
-        <button className="play-btn" onClick={togglePlay} title={t('shot.playPause')}>
+        <button className="play-btn" onClick={togglePlay} title={t('shot.playPause')} aria-label={t('shot.playPause')}>
           <Icon name={playing ? 'pause' : 'play'} size={18} fill />
         </button>
-        <button className="btn icon" onClick={() => engine.seek(engine.time + 1 / (project.fps || 30))}>
+        <button className="btn icon" title={t('shot.frameStep')} aria-label={t('shot.frameStep')} onClick={() => engine.stepFrame(1)}>
           <Icon name="chevronRight" size={15} />
         </button>
-        <button className="btn icon" onClick={() => engine.seek(engine.duration)}>
+        <button className="btn icon" title={t('cap.end')} aria-label={t('cap.end')} onClick={() => engine.seek(engine.duration)}>
           <Icon name="redo" size={15} />
         </button>
 
@@ -160,7 +179,7 @@ export default function Stage() {
           00:00.00 / 00:00
         </div>
 
-        <select className="select" style={{ width: 78, padding: '4px 8px' }} value={rate} onChange={(e) => { const v = Number(e.target.value); setRate(v); engine.setRate(v) }}>
+        <select className="select" aria-label={t('aud.rate')} style={{ width: 78, padding: '4px 8px' }} value={rate} onChange={(e) => { const v = Number(e.target.value); setRate(v); engine.setRate(v) }}>
           {[0.25, 0.5, 1, 1.5, 2].map((r) => (
             <option key={r} value={r}>
               {r}×
@@ -171,6 +190,7 @@ export default function Stage() {
         <div className="row gap-6" style={{ minWidth: 132 }}>
           <button
             className="btn icon ghost"
+            aria-label={volume === 0 || mute ? t('tl.mute') : t('aud.master')}
             title={volume === 0 || mute ? t('tl.mute') : t('aud.master')}
             onClick={() => {
               const m = !mute
@@ -187,6 +207,7 @@ export default function Stage() {
             step="0.02"
             value={volume}
             onChange={(e) => applyVolume(parseFloat(e.target.value))}
+            aria-label={t('aud.master')}
             style={{ width: 66 }}
           />
         </div>
@@ -194,7 +215,7 @@ export default function Stage() {
         <div className="row gap-6">
           <span className="tiny muted">{t('aud.meter')}</span>
           <div className="meter">
-            <i style={{ width: `${Math.min(100, meter * 130)}%` }} />
+            <i ref={meterRef} />
           </div>
         </div>
 
@@ -205,11 +226,16 @@ export default function Stage() {
           <option value="fit">720p</option>
           <option value="full">1080p</option>
         </select>
-        <button className="btn icon ghost" title={t('exp.frame')} onClick={() => flipFrame(project)}>
+        <button className="btn icon ghost" title={t('exp.frame')} aria-label={t('exp.frame')} onClick={() => flipFrame(project)}>
           <Icon name="image" size={15} />
         </button>
-        <button className="btn icon ghost" title={t('tl.collapse')} onClick={() => patchUi({ timelineCollapsed: !ui.timelineCollapsed })}>
-          <Icon name={ui.timelineCollapsed ? 'chevronDown' : 'chevronRight'} size={15} />
+        <button
+          className="btn icon ghost"
+          title={t('tl.collapse')}
+          aria-label={t('tl.collapse')}
+          onClick={() => patchUi({ timelineCollapsed: !timelineCollapsed })}
+        >
+          <Icon name={timelineCollapsed ? 'chevronDown' : 'chevronRight'} size={15} />
         </button>
       </div>
     </div>

@@ -84,16 +84,61 @@ export function Icon({ name, size = 16, className = '', fill = false, style = nu
 
 export function Modal({ title, children, onClose, footer, size = '', className = '' }) {
   const t = useT()
+  const boxRef = useRef(null)
+
   useEffect(() => {
+    const opener = document.activeElement
     const onKey = (e) => {
-      if (e.key === 'Escape') onClose?.()
+      if (e.key === 'Escape') {
+        onClose?.()
+        return
+      }
+      if (e.key !== 'Tab') return
+      // keep the keyboard inside the dialog
+      const root = boxRef.current
+      if (!root) return
+      const items = [...root.querySelectorAll('a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+      if (!items.length) return
+      const first = items[0]
+      const last = items[items.length - 1]
+      const active = document.activeElement
+      if (e.shiftKey && (active === first || !root.contains(active))) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    const body = document.body
+    const prevOverflow = body.style.overflow
+    body.style.overflow = 'hidden'
+    // land on the first real field so nothing needs a mouse
+    const target =
+      boxRef.current?.querySelector('input, select, textarea') || boxRef.current?.querySelector('.modal-foot button') || boxRef.current
+    try {
+      target?.focus?.()
+    } catch {
+      /* ignore */
+    }
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      body.style.overflow = prevOverflow
+      if (opener && typeof opener.focus === 'function') opener.focus()
+    }
   }, [onClose])
+
   return (
     <div className="modal-back" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
-      <div className={`modal ${size} ${className}`} role="dialog" aria-label={title}>
+      <div
+        className={`modal ${size} ${className}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        ref={boxRef}
+      >
         <div className="modal-head">
           <h3 style={{ fontSize: 15 }}>{title}</h3>
           <button className="btn icon ghost" onClick={onClose} aria-label={t('common.close')}>
@@ -112,9 +157,9 @@ export function Modal({ title, children, onClose, footer, size = '', className =
 export function Toaster({ toasts, onDismiss }) {
   const t = useT()
   return (
-    <div className="toasts">
+    <div className="toasts" aria-live="polite" aria-atomic="false">
       {toasts.map((x) => (
-        <div key={x.id} className={`toast ${x.kind}`} onClick={() => onDismiss(x.id)} role="status">
+        <div key={x.id} className={`toast ${x.kind}`} onClick={() => onDismiss(x.id)} role="status" title={t('common.close')}>
           {x.title ? <b>{t(x.title)}</b> : null}
           {t(x.message)}
         </div>
@@ -129,7 +174,14 @@ export function Section({ title, children, right = null, defaultOpen = true, ico
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="section">
-      <h4 onClick={() => setOpen((o) => !o)} style={{ cursor: 'pointer', justifyContent: 'space-between' }}>
+      <h4
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setOpen((o) => !o))}
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        style={{ cursor: 'pointer', justifyContent: 'space-between' }}
+      >
         <span className="row gap-6">
           {icon ? <Icon name={icon} size={13} /> : null}
           {title}
@@ -268,12 +320,19 @@ export function Scrubber({ value, onChange, step = 1, min = -Infinity, max = Inf
       const next = Math.max(min, Math.min(max, start.current.v + (document.documentElement.dir === 'rtl' ? -delta : delta)))
       onChange(next)
     }
-    const up = () => {
+    const up = (ev) => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+      try {
+        if (ev?.pointerId != null && e.currentTarget?.releasePointerCapture) e.currentTarget.releasePointerCapture(ev.pointerId)
+      } catch {
+        /* ignore */
+      }
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
   }
   return (
     <div ref={ref} className="row between gap-8" style={{ cursor: 'ew-resize', userSelect: 'none', padding: '3px 0' }} onPointerDown={onDown}>

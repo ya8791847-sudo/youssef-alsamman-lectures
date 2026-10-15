@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useI18n, fmtDur } from '../i18n/index.jsx'
+import { useI18n } from '../i18n/index.jsx'
 import { ASPECTS, FPS_PRESETS, FILTERS } from '../engine/presets.js'
 import { TOOLS } from '../engine/ai/tools.js'
 import { createDemoProject } from '../store/demo.js'
@@ -46,6 +46,7 @@ export default function Dashboard() {
   const [aspect, setAspect] = useState('16:9')
   const [fps, setFps] = useState(30)
   const [busy, setLocalBusy] = useState(null)
+  const [confirm, setConfirm] = useState(null) // { mode: 'one' | 'all', id?, name? }
   const fileRef = useRef(null)
 
   useEffect(() => {
@@ -109,11 +110,27 @@ export default function Dashboard() {
     }
   }
 
-  const deleteSaved = async (e, id) => {
-    e.stopPropagation()
+  const deleteSaved = async (id) => {
     await removeProject(id)
     const list = await loadAllProjects()
     setLocalProjects(list)
+    setProjects(list)
+    toast('toast.deleted', 'ok')
+  }
+
+  const clearAll = async () => {
+    for (const p of projects) await removeProject(p.id)
+    setLocalProjects([])
+    setProjects([])
+    toast('toast.deleted', 'ok')
+  }
+
+  const runConfirm = async () => {
+    const job = confirm
+    setConfirm(null)
+    if (!job) return
+    if (job.mode === 'all') await clearAll()
+    else await deleteSaved(job.id)
   }
 
   const importProjectFile = async (file) => {
@@ -248,13 +265,7 @@ export default function Dashboard() {
           <div className="section-title">
             <h2>{t('dash.recent')}</h2>
             {projects.length ? (
-              <button
-                className="btn ghost sm"
-                onClick={async () => {
-                  for (const p of projects) await removeProject(p.id)
-                  setLocalProjects([])
-                }}
-              >
+              <button className="btn ghost sm" onClick={() => setConfirm({ mode: 'all' })}>
                 <Icon name="trash" size={13} /> {t('dash.clearAll')}
               </button>
             ) : null}
@@ -262,7 +273,19 @@ export default function Dashboard() {
           {projects.length ? (
             <div className="proj-grid">
               {projects.map((p, i) => (
-                <div key={p.id} className="proj-card" onClick={() => openSaved(p)}>
+                <div
+                  key={p.id}
+                  className="proj-card"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openSaved(p)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      openSaved(p)
+                    }
+                  }}
+                >
                   <div className={`cover g${i % 3}`}>
                     <Icon name="film" size={26} />
                     <span className="chip" style={{ position: 'absolute', bottom: 8, insetInlineEnd: 8 }}>
@@ -277,7 +300,15 @@ export default function Dashboard() {
                         {new Date(p.updatedAt || p.createdAt).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-GB')}
                       </span>
                     </div>
-                    <button className="btn icon ghost sm" onClick={(e) => deleteSaved(e, p.id)} title={t('common.delete')}>
+                    <button
+                      className="btn icon ghost sm"
+                      aria-label={`${t('common.delete')} — ${p.name}`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setConfirm({ mode: 'one', id: p.id, name: p.name })
+                      }}
+                      title={t('common.delete')}
+                    >
                       <Icon name="trash" size={14} />
                     </button>
                   </div>
@@ -337,6 +368,33 @@ export default function Dashboard() {
           </span>
         </div>
       </div>
+
+      {confirm ? (
+        <Modal
+          title={confirm.mode === 'all' ? t('dash.confirmClear') : t('dash.confirmDelete')}
+          onClose={() => setConfirm(null)}
+          size="sm"
+          footer={
+            <>
+              <button className="btn ghost" onClick={() => setConfirm(null)}>
+                {t('common.cancel')}
+              </button>
+              <button className="btn danger" onClick={runConfirm}>
+                <Icon name="trash" size={14} /> {t('common.delete')}
+              </button>
+            </>
+          }
+        >
+          <p className="small" style={{ margin: 0, lineHeight: 1.9 }}>
+            {confirm.mode === 'all' ? t('dash.confirmClearDesc') : t('dash.confirmDeleteDesc')}
+          </p>
+          {confirm.mode === 'one' && confirm.name ? (
+            <div className="chip on" style={{ marginTop: 10 }}>
+              {confirm.name}
+            </div>
+          ) : null}
+        </Modal>
+      ) : null}
 
       {showNew ? (
         <Modal

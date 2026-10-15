@@ -1,7 +1,7 @@
 {
   "name": "laqta-ai-studio",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "Laqta AI - AI-powered video editing studio in the browser (AR/EN)",
   "scripts": {

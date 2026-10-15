@@ -8,6 +8,42 @@ import { normalizeProject, newProject } from './model.js'
 
 const listeners = new Set()
 
+/* --------------------------- remembered UI prefs -------------------------- */
+/* The editor should open the way you left it (zoom, snapping, open tabs…)     */
+
+const PREFS_KEY = 'laqta.ui'
+const PREF_KEYS = ['zoom', 'snap', 'autoScroll', 'leftTab', 'rightTab', 'timelineCollapsed']
+
+function readPrefs() {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(PREFS_KEY) : null
+    if (!raw) return {}
+    const data = JSON.parse(raw)
+    const out = {}
+    for (const k of PREF_KEYS) if (k in data) out[k] = data[k]
+    // sanity-check the numbers so a corrupt entry can't break the timeline
+    if (typeof out.zoom !== 'number' || !isFinite(out.zoom)) delete out.zoom
+    else out.zoom = Math.max(6, Math.min(600, out.zoom))
+    for (const k of ['snap', 'autoScroll', 'timelineCollapsed']) {
+      if (k in out && typeof out[k] !== 'boolean') delete out[k]
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+function writePrefs() {
+  try {
+    if (typeof localStorage === 'undefined') return
+    const data = {}
+    for (const k of PREF_KEYS) data[k] = state.ui[k]
+    localStorage.setItem(PREFS_KEY, JSON.stringify(data))
+  } catch {
+    /* private mode — prefs are simply not remembered */
+  }
+}
+
 export const initialState = {
   view: 'dashboard', // dashboard | editor
   ready: false,
@@ -39,11 +75,23 @@ export const initialState = {
   },
   toasts: [],
   ai: { running: null, progress: 0, logs: [], lastResult: null },
-  history: { past: [], future: [] },
+  history: { past: [], future: [], pastLabels: [], futureLabels: [] },
   dirty: false,
+  lastLabel: '',
+}
+
+const remembered = readPrefs()
+if (Object.keys(remembered).length) {
+  initialState.ui = { ...initialState.ui, ...remembered }
 }
 
 let state = initialState
+
+let prefsTimer = null
+subscribe(() => {
+  if (prefsTimer) clearTimeout(prefsTimer)
+  prefsTimer = setTimeout(writePrefs, 400)
+})
 
 export function getState() {
   return state
@@ -124,10 +172,11 @@ export function commit(mutator, { history = true, label = '' } = {}) {
   const after = snapshot(result)
   if (before === after) return
   const past = history ? [...state.history.past, before].slice(-MAX_HISTORY) : state.history.past
+  const pastLabels = history ? [...(state.history.pastLabels || []), label].slice(-MAX_HISTORY) : state.history.pastLabels || []
   setState((s) => ({
     ...s,
     project: { ...result, updatedAt: Date.now() },
-    history: { past, future: [] },
+    history: { past, future: [], pastLabels, futureLabels: [] },
     dirty: true,
     lastLabel: label,
   }))
@@ -139,24 +188,62 @@ function pruneSelection(project, selection) {
 }
 
 export function undo() {
+  const before = state
+  if (!before.history.past.length || !before.project) return false
+  const labels = before.history.pastLabels || []
+  const label = labels[labels.length - 1] || ''
   setState((s) => {
     if (!s.history.past.length || !s.project) return s
     const past = [...s.history.past]
     const prev = past.pop()
+    const pastLabels = [...(s.history.pastLabels || [])]
+    if (pastLabels.length) pastLabels.pop()
     const future = [snapshot(s.project), ...s.history.future].slice(0, MAX_HISTORY)
+    const futureLabels = [label, ...(s.history.futureLabels || [])].slice(0, MAX_HISTORY)
     const project = normalizeProject(JSON.parse(prev))
-    return { ...s, project, history: { past, future }, dirty: true, ui: { ...s.ui, selection: pruneSelection(project, s.ui.selection) } }
+    return {
+      ...s,
+      project,
+      history: { past, future, pastLabels, futureLabels },
+      dirty: true,
+      lastLabel: label,
+      ui: { ...s.ui, selection: pruneSelection(project, s.ui.selection) },
+    }
   })
+  if (label) toast('toast.undone', 'info', `hist.${label}`)
+  return true
 }
 
 export function redo() {
+  const before = state
+  if (!before.history.future.length || !before.project) return false
+  const labels = before.history.futureLabels || []
+  const label = labels[0] || ''
   setState((s) => {
     if (!s.history.future.length || !s.project) return s
     const [next, ...future] = s.history.future
+    const futureLabels = [...(s.history.futureLabels || [])]
+    if (futureLabels.length) futureLabels.shift()
     const past = [...s.history.past, snapshot(s.project)].slice(-MAX_HISTORY)
+    const pastLabels = [...(s.history.pastLabels || []), label].slice(-MAX_HISTORY)
     const project = normalizeProject(JSON.parse(next))
-    return { ...s, project, history: { past, future }, dirty: true, ui: { ...s.ui, selection: pruneSelection(project, s.ui.selection) } }
+    return {
+      ...s,
+      project,
+      history: { past, future, pastLabels, futureLabels },
+      dirty: true,
+      lastLabel: label,
+      ui: { ...s.ui, selection: pruneSelection(project, s.ui.selection) },
+    }
   })
+  if (label) toast('toast.redone', 'info', `hist.${label}`)
+  return true
+}
+
+/** Human name of the next action undo() would reverse ('' when unavailable). */
+export function undoLabel() {
+  const labels = state.history.pastLabels || []
+  return labels[labels.length - 1] || ''
 }
 
 export function canUndo() {
@@ -174,8 +261,9 @@ export function openProject(project) {
     ...s,
     view: 'editor',
     project: p,
-    history: { past: [], future: [] },
+    history: { past: [], future: [], pastLabels: [], futureLabels: [] },
     dirty: false,
+    lastLabel: '',
     ui: { ...s.ui, selection: [], selectedMedia: p.media?.[0]?.id || null, playing: false },
   }))
 }
